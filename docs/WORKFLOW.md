@@ -6,7 +6,7 @@
 flowchart TB
     subgraph Entry["入口"]
         A[用户输入任务] --> B{入口类型}
-        B -->|Gradio UI| C[app.py process_input]
+        B -->|Gradio UI| C[app_feishu_gateway process_input]
         B -->|飞书消息| D[feishu_gateway _run_agent_task]
     end
 
@@ -27,6 +27,8 @@ flowchart TB
         P3 --> P4[解析 JSON plan_data]
         P4 --> P5{action 类型?}
         
+        P5 -->|ASK_USER| P5a[向用户提问，等待回复]
+        P5a --> P1
         P5 -->|FAIL| P6[输出失败信息 + TASK_FAILED]
         P5 -->|同一操作重复3次| P6
         P5 -->|None| P7[输出完成信息 + TASK_COMPLETE]
@@ -83,7 +85,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     subgraph 入口层
-        App[app.py Gradio]
+        App[app_feishu_gateway Gradio]
         Feishu[feishu_gateway]
     end
 

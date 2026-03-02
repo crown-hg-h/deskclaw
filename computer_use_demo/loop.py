@@ -100,6 +100,7 @@ def sampling_loop_sync(
     stop_requested: Callable[[], bool] | None = None,
     sop_save_callback: Callable[[str, str], None] | None = None,
     pending_messages_callback: Callable[[], list] | None = None,
+    ask_user_callback: Callable[[str], str] | None = None,
 ):
     """
     Synchronous agentic sampling loop for the assistant/tool interaction of computer use.
@@ -255,7 +256,32 @@ def sampling_loop_sync(
 
         yield action_type
 
-        # Step 2a: 检查是否 Planner 主动输出 FAIL
+        # Step 2a: 检查是否 Planner 需要向用户提问（不确定时暂停并等待用户回复）
+        if str(action_type).upper() == "ASK_USER":
+            question = (plan_data.get("value") or plan_data.get("question") or "").strip()
+            if not question:
+                question = "请提供更多信息以继续执行任务。"
+            if ask_user_callback:
+                try:
+                    user_reply = ask_user_callback(question)  # 回调内部会展示问题并等待
+                    if user_reply and user_reply.strip():
+                        messages.append({
+                            "role": "user",
+                            "content": [f"用户回复: {user_reply.strip()}"],
+                        })
+                        output_callback(f"收到回复: {user_reply.strip()}", sender="bot")
+                        logger.info("用户已回复，继续执行: %s", user_reply[:50])
+                except Exception as e:
+                    logger.warning("ask_user_callback 异常: %s，将用户回复视为空", e)
+            else:
+                # 无回调时，将问题作为提示追加，让模型在下一轮自行处理
+                messages.append({
+                    "role": "user",
+                    "content": [f"[系统提示：需要用户确认] {question}"],
+                })
+            continue  # 不执行动作，直接进入下一轮 Planner
+
+        # Step 2b: 检查是否 Planner 主动输出 FAIL
         if str(action_type).upper() == "FAIL":
             fail_reason = plan_data.get("value", "同一操作重复三次未完成")
             final_sc, final_sc_path = get_screenshot(selected_screen=selected_screen, resize=True, target_width=target_width, target_height=target_height)
@@ -270,7 +296,7 @@ def sampling_loop_sync(
             yield TASK_FAILED
             return
 
-        # Step 2b: 检测同一操作是否重复三次
+        # Step 2c: 检测同一操作是否重复三次
         action_key = _action_key(plan_data)
         recent_actions.append(action_key)
         if len(recent_actions) > REPEAT_FAIL_THRESHOLD:
@@ -289,7 +315,7 @@ def sampling_loop_sync(
             yield TASK_FAILED
             return
 
-        # Step 2c: Check if no further actions
+        # Step 2d: Check if no further actions
         if not action_type or str(action_type) == "None":
             final_sc, final_sc_path = get_screenshot(selected_screen=selected_screen, resize=True, target_width=target_width, target_height=target_height)
             final_image_b64 = encode_image(str(final_sc_path))

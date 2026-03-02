@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import base64
+import queue
 import io
 import json
 import os
@@ -33,6 +34,7 @@ try:
 except ImportError:
     pass
 import platform
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
@@ -188,6 +190,15 @@ def _render_message_for_feishu(message: Any, hide_images: bool = False) -> str |
 _stop_requested_flag: dict = {"value": False}
 
 
+# 飞书「向用户提问」时使用：Planner 不确定时暂停，等待用户下一条消息后继续
+_feishu_user_reply_queue = queue.Queue()
+_feishu_awaiting_reply = False
+
+# 任务互斥：同一时间只允许一个 Agent 任务执行，避免多条消息导致任务交叉（如 Cursor 任务中突然执行微信操作）
+_feishu_task_lock = threading.Lock()
+_feishu_task_running = False
+
+
 def _run_agent_task(
     user_input: str,
     send_reply_fn: callable,
@@ -197,6 +208,7 @@ def _run_agent_task(
     system_prompt_suffix: str = "",
     config=None,
     stop_requested: Callable[[], bool] | None = None,
+    ask_user_callback: Callable[[str], str] | None = None,
 ) -> None:
     """
     与 app 一致：每条 output_callback/tool_output_callback 产生一条消息，立即发送到飞书。
@@ -273,6 +285,21 @@ def _run_agent_task(
         except Exception as e:
             logger.warning("飞书任务 SOP 保存失败: %s", e)
 
+    def _ask_user_for_feishu(question: str) -> str:
+        """飞书场景：发送问题，等待用户下一条消息作为回复"""
+        global _feishu_awaiting_reply
+        _send_piece("text", f"❓ {question}\n\n请直接回复此消息。")
+        _feishu_awaiting_reply = True
+        try:
+            return _feishu_user_reply_queue.get(timeout=300)
+        except queue.Empty:
+            logger.warning("等待飞书用户回复超时")
+            return ""
+        finally:
+            _feishu_awaiting_reply = False
+
+    _ask_user = ask_user_callback or _ask_user_for_feishu
+
     try:
         for msg in sampling_loop_sync(
             planner_model=planner_model,
@@ -295,6 +322,7 @@ def _run_agent_task(
             target_height=1080,
             stop_requested=_check_stop,
             sop_save_callback=_sop_save_callback,
+            ask_user_callback=_ask_user,
         ):
             if msg is TASK_COMPLETE:
                 break
@@ -374,6 +402,7 @@ def create_feishu_gateway(
 
     def on_message_receive(data):
         """处理 im.message.receive_v1 事件"""
+        global _feishu_task_running
         try:
             event = getattr(data, "event", None)
             if not event:
@@ -402,6 +431,17 @@ def create_feishu_gateway(
             if not text.strip():
                 return
 
+            # 若任务正在等待用户回复（Planner 不确定时提问），将本条消息作为回复传入
+            if _feishu_awaiting_reply:
+                try:
+                    _feishu_user_reply_queue.put_nowait(text)
+                    logger.info("收到用户回复，已传入等待中的任务: %s", text[:50])
+                except Exception:
+                    pass
+                if chat_callback:
+                    chat_callback("user", text)
+                return
+
             # 停止命令：设置标志，当前运行中的任务会在下一轮迭代时检测并终止
             if text.strip().lower() in ("stop", "停止", "stop!"):
                 _stop_requested_flag["value"] = True
@@ -410,6 +450,15 @@ def create_feishu_gateway(
                 if chat_callback:
                     chat_callback("assistant", "⏹️ 已发送停止信号")
                 return
+
+            # 任务互斥：若有任务正在执行，拒绝新任务，避免 Cursor 任务中突然执行微信操作等交叉
+            with _feishu_task_lock:
+                if _feishu_task_running:
+                    send_reply_text(message_id, "⏳ 当前有任务正在执行，请先发送「停止」或等待完成后再发送新指令。")
+                    if chat_callback:
+                        chat_callback("assistant", "⏳ 当前有任务正在执行，请等待或发送「停止」。")
+                    return
+                _feishu_task_running = True
 
             # 新任务开始，清除停止标志
             _stop_requested_flag["value"] = False
@@ -429,16 +478,23 @@ def create_feishu_gateway(
                 if chat_callback:
                     chat_callback("assistant", display)
 
-            pool.submit(
-                _run_agent_task,
-                user_input=text,
-                send_reply_fn=_reply_and_callback,
-                planner_model=planner_model,
-                planner_provider=planner_provider,
-                api_key=api_key,
-                system_prompt_suffix=system_prompt_suffix,
-                config=config,
-            )
+            def _run_and_clear():
+                try:
+                    _run_agent_task(
+                        user_input=text,
+                        send_reply_fn=_reply_and_callback,
+                        planner_model=planner_model,
+                        planner_provider=planner_provider,
+                        api_key=api_key,
+                        system_prompt_suffix=system_prompt_suffix,
+                        config=config,
+                    )
+                finally:
+                    with _feishu_task_lock:
+                        global _feishu_task_running
+                        _feishu_task_running = False
+
+            pool.submit(_run_and_clear)
         except Exception as e:
             logger.exception("处理飞书消息异常: %s", e)
 
@@ -470,7 +526,7 @@ def main():
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
-    # 根据 provider/model 解析 api_key（与 app.py 一致）
+    # 根据 provider/model 解析 api_key
     api_key = args.api_key or ""
     if (args.planner_provider == "azure" or args.planner_model == "Kimi-K2.5 (Azure)") and not api_key.strip():
         api_key = os.getenv("AZURE_OPENAI_CREDENTIALS", "")

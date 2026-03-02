@@ -20,6 +20,7 @@
 | 多显示器 | 支持任意分辨率、多显示器 |
 | 远程控制 | 手机/平板通过 Gradio 公网链接或飞书控制电脑 |
 | 飞书网关 | 飞书消息 → DeskClaw 指令，无需公网 IP |
+| 向用户提问 | 执行中遇到不确定时暂停，向用户提问后根据回复继续执行 |
 | 记忆/SOP | 任务完成后自动保存 SOP，下次类似任务可召回 |
 | 环境变量 | 敏感信息（API Key、飞书凭证等）通过 `.env` 配置 |
 
@@ -28,7 +29,6 @@
 ### 环境要求
 
 - Python ≥ 3.11
-- 可选（本地 ShowUI）：Windows 需 CUDA GPU ≥6GB；macOS 需 M1 及以上、16GB RAM
 
 ### 1. 克隆与安装
 
@@ -55,10 +55,8 @@ cp .env.example .env
 
 ### 3. 启动界面
 
-**主界面（Gradio）：**
-
 ```bash
-python app.py
+python app_feishu_gateway.py
 ```
 
 启动成功后终端会显示：
@@ -66,12 +64,6 @@ python app.py
 ```
 * Running on local URL:  http://127.0.0.1:7860
 * Running on public URL: https://xxxxxxxx.gradio.live
-```
-
-**飞书网关（可选）：**
-
-```bash
-python app_feishu_gateway.py
 ```
 
 在网页中填写飞书凭证和 Planner 配置，点击「启动网关」即可在飞书中与机器人对话。

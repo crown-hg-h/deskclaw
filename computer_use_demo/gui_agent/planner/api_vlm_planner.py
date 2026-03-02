@@ -345,11 +345,17 @@ To estimate: find the element's pixel position in the screenshot, then divide by
    Use for: scrolling web pages, long documents, lists
    Example: {{"action": "SCROLL", "value": "down", "position": null}}
 
-9. None - Task is completed, no more actions needed
+9. ASK_USER - Pause and ask the user for clarification when uncertain
+   Use when: you cannot determine the correct action from the screenshot alone (e.g. multiple similar buttons, ambiguous intent, need user to choose).
+   Required: value (the question to ask the user, in Chinese or English)
+   Example: {{"Thinking": "屏幕上有两个「确定」按钮，无法判断应点击哪一个。", "action": "ASK_USER", "value": "请告诉我应该点击左边还是右边的「确定」按钮？", "position": null}}
+   The user's reply will be appended to the conversation and you will continue in the next step.
+
+10. None - Task is completed, no more actions needed
    When outputting action "None", you MUST also output a "summary" field: a brief Chinese description of the steps you took (每步一行，如 1. 点击xxx 2. 输入xxx). This will be saved for future reference.
    Example: {{"Thinking": "任务已完成。", "action": "None", "value": null, "position": null, "summary": "1. 点击 Dock 栏的 WPS 图标\\n2. 点击文件菜单新建表格\\n3. 在第一列输入今天日期"}}
 
-10. FAIL - Task failed, terminate immediately
+11. FAIL - Task failed, terminate immediately
    Use when: the SAME step has been tried 3 times in a row without completing the task. Check the history of previous plans - if you see the same action (same type, value, position) repeated 3 times, output FAIL to terminate.
    Example: {{"action": "FAIL", "value": "Reason: same click repeated 3 times without progress", "position": null}}
 
@@ -357,7 +363,7 @@ To estimate: find the element's pixel position in the screenshot, then divide by
 You MUST output a single JSON object (no markdown, no code fences, no extra text):
 {{
     "Thinking": "Brief reasoning about current screen state and what to do next",
-    "action": "CLICK|INPUT|HOVER|PRESS|ENTER|ESCAPE|KEY|SCROLL|None|FAIL",
+    "action": "CLICK|INPUT|HOVER|PRESS|ENTER|ESCAPE|KEY|SCROLL|ASK_USER|None|FAIL",
     "value": "text for INPUT/KEY, up/down for SCROLL, or null for other actions",
     "position": [x, y] | null,
     "summary": "Only when action is None: brief Chinese steps (每步一行，1. xxx 2. xxx)"
@@ -379,7 +385,8 @@ You MUST output a single JSON object (no markdown, no code fences, no extra text
 4. Use KEY for keyboard shortcuts (closing windows, copy-paste, tab switching, etc.)
 5. When a task is fully completed, use action "None".
 6. If the SAME step (same action type, value, position) has been tried 3 times in a row without completing the task, use action "FAIL" to terminate and report failure. Do not keep retrying.
-7. Output ONLY valid JSON. No markdown code fences, no explanation outside JSON.
+7. When uncertain (e.g. multiple similar buttons, ambiguous which to click), use action "ASK_USER" with value=your question. The user will reply and you continue in the next step.
+8. Output ONLY valid JSON. No markdown code fences, no explanation outside JSON.
 """ 
 
     

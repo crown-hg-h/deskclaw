@@ -20,6 +20,7 @@ Out-of-the-box (OOTB) solution for Desktop GUI Agent, supporting:
 | Multi-display | Any resolution, multiple monitors |
 | Remote control | Control via Gradio public link or Feishu from phone/tablet |
 | Feishu gateway | Feishu messages → DeskClaw commands, no public IP |
+| Ask user | Pause when uncertain, ask user for clarification, then continue |
 | Memory/SOP | Auto-save SOP after tasks; recall for similar tasks next time |
 | Environment vars | Sensitive data (API keys, Feishu credentials) via `.env` |
 
@@ -28,7 +29,6 @@ Out-of-the-box (OOTB) solution for Desktop GUI Agent, supporting:
 ### Requirements
 
 - Python ≥ 3.11
-- Optional (local ShowUI): Windows needs CUDA GPU ≥6GB; macOS needs M1+ and 16GB RAM
 
 ### 1. Clone and Install
 
@@ -55,10 +55,8 @@ See [.env.example](.env.example) for details.
 
 ### 3. Start the Interface
 
-**Main interface (Gradio):**
-
 ```bash
-python app.py
+python app_feishu_gateway.py
 ```
 
 On success you see:
@@ -66,12 +64,6 @@ On success you see:
 ```
 * Running on local URL:  http://127.0.0.1:7860
 * Running on public URL: https://xxxxxxxx.gradio.live
-```
-
-**Feishu gateway (optional):**
-
-```bash
-python app_feishu_gateway.py
 ```
 
 Fill in Feishu credentials and Planner config in the web UI, then click "Start Gateway" to chat with the bot in Feishu.

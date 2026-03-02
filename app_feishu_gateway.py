@@ -1,7 +1,7 @@
 """
-飞书网关 - Gradio 配置界面
+DeskClaw 飞书网关 - Gradio 配置界面
 
-参考 app.py，提供前端配置飞书凭证和 Planner 模型，无需手写 .env。
+提供前端配置飞书凭证和 Planner 模型，无需手写 .env。
 启动后点击「启动网关」即可连接飞书，在飞书中与机器人对话远程控制电脑。
 
 使用方式:
@@ -10,7 +10,7 @@
 
 import os
 
-# 加载 .env（与 app.py 一致，从项目根目录加载）
+# 加载 .env，从项目根目录加载
 _project_root = os.path.dirname(os.path.abspath(__file__))
 _env_path = os.path.join(_project_root, ".env")
 try:
@@ -20,6 +20,7 @@ except ImportError:
     import warnings
     warnings.warn("python-dotenv 未安装，.env 不会被加载。请运行: pip install python-dotenv")
 
+import queue
 import threading
 import gradio as gr
 
@@ -37,6 +38,10 @@ _gateway_thread = None  # threading.Thread
 _gateway_client = None  # lark-oapi ws Client（用于停止）
 _chat_history = []  # list of {"role": ..., "content": ...}，每条消息独立一项
 _chat_lock = threading.Lock()
+
+# 任务中向用户提问时使用：Planner 不确定时会暂停，等待用户回复后继续
+_awaiting_user_reply = False
+_user_reply_queue = queue.Queue()
 
 
 def _append_chat(role: str, content: str):
@@ -59,6 +64,24 @@ def _clean_cred(v: str) -> str:
     if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
         v = v[1:-1].strip()
     return "".join(c for c in v if ord(c) >= 32 or c in "\t").strip()
+
+
+def _read_feishu_from_env_file(key: str) -> str:
+    """直接从 .env 文件读取飞书凭证，避免 python-dotenv 解析或 env 被覆盖导致的值错误"""
+    if not os.path.exists(_env_path):
+        return ""
+    try:
+        with open(_env_path, "r", encoding="utf-8-sig") as f:  # utf-8-sig 自动去除 BOM
+            for line in f:
+                line = line.strip("\r\n\t ")
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                if k.strip() == key:
+                    return _clean_cred(v)
+    except Exception as e:
+        logger.warning("读取 .env 失败: %s", e)
+    return ""
 
 
 def _run_gateway_thread(
@@ -122,6 +145,11 @@ def build_api_key(planner_model: str, api_base: str, api_key: str, model_id: str
 def start_gateway(app_id, app_secret, domain, planner_model, api_base, planner_api_key, model_id):
     """启动/重启网关按钮回调。若网关已在运行，会先停止再以当前配置重启。"""
     global _gateway_thread, _gateway_client, _chat_history
+    # 当 App Secret 为空时，从 .env 回退读取（Gradio 密码框可能未正确传递预填值）
+    if not (app_secret or "").strip():
+        app_secret = _read_feishu_from_env_file("FEISHU_APP_SECRET")
+    if not (app_id or "").strip():
+        app_id = _read_feishu_from_env_file("FEISHU_APP_ID")
     if not (app_id and app_secret):
         _append_chat("_system_", "请填写飞书 App ID 和 App Secret")
         return _get_chat_display()
@@ -153,6 +181,24 @@ def start_gateway(app_id, app_secret, domain, planner_model, api_base, planner_a
     return _get_chat_display()
 
 
+def _make_ask_user_callback():
+    """创建 ask_user 回调：暂停任务，在聊天中显示问题，等待用户回复后继续"""
+
+    def ask_user(question: str) -> str:
+        global _awaiting_user_reply
+        _append_chat("assistant", f"❓ {question}\n\n请在下方输入框回复后按发送。")
+        _awaiting_user_reply = True
+        try:
+            return _user_reply_queue.get(timeout=300)  # 5 分钟超时
+        except queue.Empty:
+            logger.warning("等待用户回复超时")
+            return ""
+        finally:
+            _awaiting_user_reply = False
+
+    return ask_user
+
+
 def _run_local_task(user_input: str, planner_model: str, api_base: str, planner_api_key: str, model_id: str):
     """在后台线程中直接执行 Agent 任务（不经过飞书），结果写入 _chat_history"""
     planner_provider = model_to_provider(planner_model)
@@ -167,6 +213,7 @@ def _run_local_task(user_input: str, planner_model: str, api_base: str, planner_
     threading.Thread(
         target=_run_agent_task,
         args=(user_input, send_fn, planner_model, planner_provider, api_key),
+        kwargs={"ask_user_callback": _make_ask_user_callback()},
         daemon=True,
     ).start()
 
@@ -225,7 +272,11 @@ with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
     gr.Markdown("> **飞书收到的消息** = App 中的「发往 DeskClaw 的指令」，与在 Gradio 界面直接输入等效。")
 
     def _env_val(key: str) -> str:
-        """从 env 读取飞书凭证，复用 _clean_cred 去除不可见字符"""
+        """飞书凭证优先从 .env 文件直接读取，避免 dotenv 解析问题；其他 key 用 os.getenv"""
+        if key.startswith("FEISHU_"):
+            v = _read_feishu_from_env_file(key)
+            if v:
+                return v
         return _clean_cred(os.getenv(key) or "")
 
     with gr.Accordion("飞书配置", open=True):
@@ -247,6 +298,21 @@ with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
             value=_env_val("FEISHU_DOMAIN") or "https://open.feishu.cn",
             placeholder="https://open.feishu.cn，国际版用 https://open.larksuite.com",
             interactive=True,
+        )
+        load_env_btn = gr.Button("从 .env 加载飞书凭证", size="sm", variant="secondary")
+
+        def load_from_env():
+            """从 .env 重新读取飞书凭证并更新到输入框"""
+            return (
+                _read_feishu_from_env_file("FEISHU_APP_ID"),
+                _read_feishu_from_env_file("FEISHU_APP_SECRET"),
+                _read_feishu_from_env_file("FEISHU_DOMAIN") or "https://open.feishu.cn",
+            )
+
+        load_env_btn.click(
+            fn=load_from_env,
+            inputs=None,
+            outputs=[feishu_app_id, feishu_app_secret, feishu_domain],
         )
 
     with gr.Accordion("Planner 模型配置", open=True):
@@ -337,8 +403,16 @@ with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
 
     def do_send(user_input, pm, base, pk, mid):
         if not user_input or not user_input.strip():
-            return gr.update(), ""
+            return _get_chat_display(), ""
         text = user_input.strip()
+        # 若任务正在等待用户回复（Planner 不确定时提问），将输入作为回复传入
+        if _awaiting_user_reply:
+            _append_chat("user", text)
+            try:
+                _user_reply_queue.put_nowait(text)
+            except Exception:
+                pass
+            return _get_chat_display(), ""
         _append_chat("user", text)
         # 停止命令：设置标志，当前运行中的任务会在下一轮迭代时检测并终止
         if text.lower() in ("stop", "停止", "stop!"):
