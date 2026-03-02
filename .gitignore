@@ -1,0 +1,23 @@
+.venv
+.env
+.ruff_cache
+__pycache__
+.pytest_cache
+.cache
+.ipynb_checkpoints
+.ipynb
+.DS_Store
+/tmp
+/.gradio
+/.zed
+/showui*
+/ui-tars*
+/demo
+/Qwen*
+/install_tools/install_qwen*
+/dev_tools*
+test.ipynb
+
+# 记忆系统用户数据（SOP 与全局事实）
+/memory/sops/
+/memory/global_facts.json
