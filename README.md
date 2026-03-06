@@ -56,7 +56,7 @@ See [.env.example](.env.example) for details.
 ### 3. Start the Interface
 
 ```bash
-python app_feishu_gateway.py
+python app.py
 ```
 
 On success you see:
@@ -82,7 +82,7 @@ Based on [OpenClaw](https://docs.openclaw.ai/channels/feishu) architecture, via 
 2. Enable permissions: `im:message`, `im:message:send_as_bot`, etc.
 3. Event subscription: add `im.message.receive_v1`, choose "Use long connection for events"
 4. Start in one of two ways:
-   - **Gradio config UI (recommended)**: `python app_feishu_gateway.py`, fill in web form and click "Start Gateway"
+   - **Gradio config UI (recommended)**: `python app.py`, fill in web form and click "Start Gateway"
    - **CLI**: Configure `.env` and run `python -m computer_use_demo.feishu_gateway`
 
 ## Supported Models

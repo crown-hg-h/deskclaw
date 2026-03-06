@@ -6,7 +6,7 @@
 flowchart TB
     subgraph Entry["入口"]
         A[用户输入任务] --> B{入口类型}
-        B -->|Gradio UI| C[app_feishu_gateway process_input]
+        B -->|Gradio UI| C[app process_input]
         B -->|飞书消息| D[feishu_gateway _run_agent_task]
     end
 
@@ -68,7 +68,7 @@ flowchart TB
         E --> F[转换为 action_item]
         F --> G[Executor 执行]
         G --> G1[解析 action 列表]
-        G1 --> G2[CLICK→mouse_move+left_click]
+        G1 --> G2[CLICK→left_click]
         G2 --> G3[ComputerTool.sync_call]
         G3 --> G4[pyautogui 操作]
         G4 --> G5[yield 更新 UI]
@@ -85,7 +85,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     subgraph 入口层
-        App[app_feishu_gateway Gradio]
+        App[app Gradio]
         Feishu[feishu_gateway]
     end
 

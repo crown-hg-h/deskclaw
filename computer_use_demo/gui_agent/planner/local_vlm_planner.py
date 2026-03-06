@@ -181,47 +181,58 @@ To estimate: find the element's pixel position in the screenshot, then divide by
 
 === AVAILABLE ACTIONS (one per response) ===
 
-1. CLICK - Single left-click at a position
+1. CLICK - Single click at a position (left or right button)
    Required: position [x, y]
+   Optional: value "left" (default) or "right"
    Example: {{"action": "CLICK", "value": null, "position": [0.5, 0.08]}}
+   Example: {{"action": "CLICK", "value": "right", "position": [0.5, 0.08]}}
 
-2. INPUT - Type text (at current cursor position, CLICK the field first)
+2. DOUBLE_CLICK - Double click at a position (left or right button)
+   Required: position [x, y]
+   Optional: value "left" (default) or "right"
+   Example: {{"action": "DOUBLE_CLICK", "value": null, "position": [0.5, 0.3]}}
+
+3. INPUT - Type text (at current cursor position, CLICK the field first)
    Required: value (text string). ASCII only.
    Example: {{"action": "INPUT", "value": "hello world", "position": null}}
 
-3. HOVER - Move mouse without clicking
+4. HOVER - Move mouse without clicking
    Required: position [x, y]
    Example: {{"action": "HOVER", "value": null, "position": [0.3, 0.1]}}
 
-4. PRESS - Long press (hold 1 second)
-   Required: position [x, y]
-   Example: {{"action": "PRESS", "value": null, "position": [0.5, 0.5]}}
+# 5. PRESS - 已注释，用途有限
+#    Example: {{"action": "PRESS", "value": null, "position": [0.5, 0.5]}}
 
-5. ENTER - Press Enter key
+6. DRAG - Drag from start to end position
+   Required: position [[x1, y1], [x2, y2]] - start and end (0-1 range)
+   Use for: dragging files, reordering, selecting text
+   Example: {{"action": "DRAG", "value": null, "position": [[0.2, 0.3], [0.6, 0.5]]}}
+
+7. ENTER - Press Enter key
    Example: {{"action": "ENTER", "value": null, "position": null}}
 
-6. ESCAPE - Press Escape key
+8. ESCAPE - Press Escape key
    Example: {{"action": "ESCAPE", "value": null, "position": null}}
 
-7. KEY - Press key or key combination (use + for combos)
+9. KEY - Press key or key combination (use + for combos)
    Required: value (e.g. "ctrl+c", "alt+f4", "tab", "backspace", "ctrl+a")
    Example: {{"action": "KEY", "value": "ctrl+w", "position": null}}
 
-8. SCROLL - Scroll page. Required: value ("up" or "down")
+10. SCROLL - Scroll page. Required: value ("up" or "down")
    Example: {{"action": "SCROLL", "value": "down", "position": null}}
 
-9. None - Task completed.
+11. None - Task completed.
    When action is None, also output "summary": brief Chinese steps (每步一行，1. xxx 2. xxx).
    Example: {{"action": "None", "value": null, "position": null, "summary": "1. 点击地址栏\\n2. 输入网址\\n3. 按 Enter"}}
 
-10. FAIL - Task failed, terminate immediately.
+12. FAIL - Task failed, terminate immediately.
    Use when: the SAME step has been tried 3 times in a row without completing. Check history - if same action repeated 3 times, output FAIL.
    Example: {{"action": "FAIL", "value": "Reason: same step repeated 3 times", "position": null}}
 
 === OUTPUT FORMAT (JSON only, no markdown) ===
 {{
     "Thinking": "brief reasoning",
-    "action": "CLICK|INPUT|HOVER|PRESS|ENTER|ESCAPE|KEY|SCROLL|None|FAIL",
+    "action": "CLICK|DOUBLE_CLICK|INPUT|HOVER|DRAG|ENTER|ESCAPE|KEY|SCROLL|None|FAIL",
     "value": "text/key or null",
     "position": [x, y] or null,
     "summary": "Only when action is None: brief Chinese steps (每步一行)"

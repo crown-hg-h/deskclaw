@@ -38,10 +38,12 @@ Action = Literal[
     "left_click",
     "left_click_drag",
     "right_click",
+    "right_double_click",
     "middle_click",
     "double_click",
     "screenshot",
     "cursor_position",
+    "scroll",
 ]
 
 
@@ -467,10 +469,28 @@ class ComputerTool(BaseAnthropicTool):
                 _type_text(text)
                 return ToolResult(output=text)
 
+        if action == "scroll":
+            scroll_dir = (text or "down").strip().lower()
+            if scroll_dir not in ("up", "down"):
+                scroll_dir = "down"
+            if coordinate is None:
+                pyautogui.scroll(3 if scroll_dir == "up" else -3)
+                return ToolResult(output=f"Scrolled {scroll_dir}")
+            else:
+                if self.is_scaling:
+                    x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
+                else:
+                    x, y = coordinate
+                x += self.offset_x
+                y += self.offset_y
+                pyautogui.scroll(3 if scroll_dir == "up" else -3, x, y)
+                return ToolResult(output=f"Scrolled {scroll_dir} at ({x}, {y})")
+
         if action in (
             "left_click",
             "right_click",
             "double_click",
+            "right_double_click",
             "middle_click",
             "screenshot",
             "cursor_position",
@@ -478,12 +498,35 @@ class ComputerTool(BaseAnthropicTool):
         ):
             if text is not None:
                 raise ToolError(f"text is not accepted for {action}")
-            if coordinate is not None:
-                raise ToolError(f"coordinate is not accepted for {action}")
-            elif action == "cursor_position":
+            if action == "cursor_position":
                 x, y = pyautogui.position()
                 x, y = self.scale_coordinates(ScalingSource.COMPUTER, x, y)
                 return ToolResult(output=f"X={x},Y={y}")
+            # 支持带坐标的点击（移动+点击合并为一次）
+            if coordinate is not None:
+                if not isinstance(coordinate, (list, tuple)) or len(coordinate) != 2:
+                    raise ToolError(f"{coordinate} must be a tuple of length 2")
+                if self.is_scaling:
+                    x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
+                else:
+                    x, y = coordinate
+                x += self.offset_x
+                y += self.offset_y
+                if action == "left_click":
+                    pyautogui.click(x, y)
+                elif action == "right_click":
+                    pyautogui.rightClick(x, y)
+                elif action == "double_click":
+                    pyautogui.doubleClick(x, y)
+                elif action == "right_double_click":
+                    pyautogui.click(x, y, button="right", clicks=2)
+                elif action == "middle_click":
+                    pyautogui.middleClick(x, y)
+                elif action == "left_press":
+                    pyautogui.mouseDown(x, y)
+                    time.sleep(1)
+                    pyautogui.mouseUp(x, y)
+                return ToolResult(output=f"Performed {action} at ({x}, {y})")
             else:
                 if action == "left_click":
                     pyautogui.click()
@@ -493,6 +536,8 @@ class ComputerTool(BaseAnthropicTool):
                     pyautogui.middleClick()
                 elif action == "double_click":
                     pyautogui.doubleClick()
+                elif action == "right_double_click":
+                    pyautogui.click(button="right", clicks=2)
                 elif action == "left_press":
                     pyautogui.mouseDown()
                     time.sleep(1)

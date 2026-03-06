@@ -73,7 +73,15 @@ def _action_key(plan_data: dict) -> tuple:
     value = plan_data.get("value")
     pos = plan_data.get("position")
     if pos is not None and isinstance(pos, (list, tuple)) and len(pos) >= 2:
-        pos = (round(float(pos[0]), 2), round(float(pos[1]), 2))
+        # 标准 position [x, y]
+        if isinstance(pos[0], (int, float)) and isinstance(pos[1], (int, float)):
+            pos = (round(float(pos[0]), 2), round(float(pos[1]), 2))
+        # DRAG position [[x1,y1],[x2,y2]]
+        elif isinstance(pos[0], (list, tuple)) and isinstance(pos[1], (list, tuple)) and len(pos[0]) >= 2 and len(pos[1]) >= 2:
+            pos = (
+                (round(float(pos[0][0]), 2), round(float(pos[0][1]), 2)),
+                (round(float(pos[1][0]), 2), round(float(pos[1][1]), 2)),
+            )
     return (str(action), str(value) if value is not None else None, pos)
 
 

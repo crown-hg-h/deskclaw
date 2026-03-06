@@ -56,7 +56,7 @@ cp .env.example .env
 ### 3. 启动界面
 
 ```bash
-python app_feishu_gateway.py
+python app.py
 ```
 
 启动成功后终端会显示：
@@ -82,7 +82,7 @@ python app_feishu_gateway.py
 2. 配置权限：`im:message`、`im:message:send_as_bot` 等，启用机器人能力
 3. 事件订阅：添加 `im.message.receive_v1`，选择「使用长连接接收事件」
 4. 启动方式二选一：
-   - **Gradio 配置界面（推荐）**：`python app_feishu_gateway.py`，在网页中填写飞书凭证和 Planner 配置后点击「启动网关」
+   - **Gradio 配置界面（推荐）**：`python app.py`，在网页中填写飞书凭证和 Planner 配置后点击「启动网关」
    - **命令行**：配置 `.env` 后运行 `python -m computer_use_demo.feishu_gateway`
 
 ## 支持模型

@@ -39,13 +39,15 @@ class ShowUIExecutor:
         
         self.supported_action_type={
             "CLICK": 'key',
+            "DOUBLE_CLICK": "key",
+            "DRAG": "key",
             "INPUT": "key",
+            "SCROLL": "scroll",
             "ENTER": "key",
             "ESC": "key",
             "ESCAPE": "key",
-            "PRESS": "key",
+            # "PRESS": "key",  # 已注释
             "HOVER": "mouse_move",
-            "SCROLL": "key",
             "KEY": "key",
         }
 
@@ -112,7 +114,6 @@ class ShowUIExecutor:
             return action_output
         else:
             try:
-                action_output.replace("'", "\"")
                 action_dict = ast.literal_eval(action_output)
                 return action_dict
             except Exception as e:
@@ -159,16 +160,41 @@ class ShowUIExecutor:
                     raise ValueError(f"Action {action_item['action']} not supported. Check the output from ShowUI: {output_text}")
                     # continue
                 
-                elif action_item["action"] == "CLICK":  # 1. click -> mouse_move + left_click
+                elif action_item["action"] == "CLICK":  # 1. click -> left_click 或 right_click（value: left/right，默认 left）
                     if not action_item.get("position"):
                         raise ValueError("CLICK requires position")
                     x, y = action_item["position"]
-                    action_item["position"] = (int(x * (self.screen_bbox[2] - self.screen_bbox[0])),
-                                               int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
-                    refined_output.append({"action": "mouse_move", "text": None, "coordinate": tuple(action_item["position"])})
-                    refined_output.append({"action": "left_click", "text": None, "coordinate": None})
+                    btn = (action_item.get("value") or "left").strip().lower()
+                    action_type = "right_click" if btn == "right" else "left_click"
+                    coord = (int(x * (self.screen_bbox[2] - self.screen_bbox[0])),
+                             int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
+                    refined_output.append({"action": action_type, "text": None, "coordinate": coord})
+
+                elif action_item["action"] == "DOUBLE_CLICK":  # 2. double_click -> double_click 或 right_double（value: left/right）
+                    if not action_item.get("position"):
+                        raise ValueError("DOUBLE_CLICK requires position")
+                    x, y = action_item["position"]
+                    btn = (action_item.get("value") or "left").strip().lower()
+                    action_type = "right_double_click" if btn == "right" else "double_click"
+                    coord = (int(x * (self.screen_bbox[2] - self.screen_bbox[0])),
+                             int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
+                    refined_output.append({"action": action_type, "text": None, "coordinate": coord})
+
+                elif action_item["action"] == "DRAG":  # 3. drag -> mouse_move 到起点 + left_click_drag 到终点
+                    pos = action_item.get("position")
+                    if not pos or not isinstance(pos, (list, tuple)) or len(pos) != 2:
+                        raise ValueError("DRAG requires position [[x1,y1], [x2,y2]]")
+                    start, end = pos[0], pos[1]
+                    if not start or not end or len(start) != 2 or len(end) != 2:
+                        raise ValueError("DRAG requires position [[x1,y1], [x2,y2]]")
+                    w = self.screen_bbox[2] - self.screen_bbox[0]
+                    h = self.screen_bbox[3] - self.screen_bbox[1]
+                    start_px = (int(start[0] * w), int(start[1] * h))
+                    end_px = (int(end[0] * w), int(end[1] * h))
+                    refined_output.append({"action": "mouse_move", "text": None, "coordinate": start_px})
+                    refined_output.append({"action": "left_click_drag", "text": None, "coordinate": end_px})
                 
-                elif action_item["action"] == "INPUT":  # 2. input -> type
+                elif action_item["action"] == "INPUT":  # 4. input -> type
                     refined_output.append({"action": "type", "text": action_item.get("value") or "", "coordinate": None})
                 
                 elif action_item["action"] == "ENTER":  # 3. enter -> key, enter
@@ -185,25 +211,28 @@ class ShowUIExecutor:
                                                int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
                     refined_output.append({"action": "mouse_move", "text": None, "coordinate": tuple(action_item["position"])})
                     
-                elif action_item["action"] == "SCROLL":  # 6. scroll -> key: pagedown
-                    if action_item.get("value") == "up":
-                        refined_output.append({"action": "key", "text": "pageup", "coordinate": None})
-                    elif action_item.get("value") == "down":
-                        refined_output.append({"action": "key", "text": "pagedown", "coordinate": None})
+                elif action_item["action"] == "SCROLL":  # 6. scroll -> 滚轮滚动（非 pageup/pagedown）
+                    val = (action_item.get("value") or "").strip().lower()
+                    if val == "up":
+                        refined_output.append({"action": "scroll", "text": "up", "coordinate": None})
+                    elif val == "down":
+                        refined_output.append({"action": "scroll", "text": "down", "coordinate": None})
                     else:
                         raise ValueError(f"Scroll direction {action_item.get('value')} not supported. Use 'up' or 'down'.")
 
-                elif action_item["action"] == "PRESS":  # 7. press
-                    if not action_item.get("position"):
-                        raise ValueError("PRESS requires position")
-                    x, y = action_item["position"]
-                    action_item["position"] = (int(x * (self.screen_bbox[2] - self.screen_bbox[0])),
-                                               int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
-                    refined_output.append({"action": "mouse_move", "text": None, "coordinate": tuple(action_item["position"])})
-                    refined_output.append({"action": "left_press", "text": None, "coordinate": None})
+                # elif action_item["action"] == "PRESS":  # 已注释
+                #     if not action_item.get("position"):
+                #         raise ValueError("PRESS requires position")
+                #     x, y = action_item["position"]
+                #     action_item["position"] = (int(x * (self.screen_bbox[2] - self.screen_bbox[0])),
+                #                                int(y * (self.screen_bbox[3] - self.screen_bbox[1])))
+                #     refined_output.append({"action": "mouse_move", "text": None, "coordinate": tuple(action_item["position"])})
+                #     refined_output.append({"action": "left_press", "text": None, "coordinate": None})
 
                 elif action_item["action"] == "KEY":  # 8. key/shortcut
-                    key_value = action_item.get("value") or ""
+                    key_value = (action_item.get("value") or "").strip()
+                    if not key_value:
+                        raise ValueError("KEY requires value (e.g. 'ctrl+c', 'tab')")
                     refined_output.append({"action": "key", "text": key_value, "coordinate": None})
 
             return refined_output

@@ -1,11 +1,10 @@
 """
-DeskClaw 飞书网关 - Gradio 配置界面
+DeskClaw - Gradio 配置界面
 
-提供前端配置飞书凭证和 Planner 模型，无需手写 .env。
-启动后点击「启动网关」即可连接飞书，在飞书中与机器人对话远程控制电脑。
+提供 Planner 模型配置，支持本地指令直接执行。飞书网关为可选项，启用后可在飞书中与机器人对话远程控制电脑。
 
 使用方式:
-    python app_feishu_gateway.py
+    python app.py
 """
 
 import os
@@ -222,7 +221,7 @@ def _get_chat_display():
     """获取用于 Chatbot 显示的聊天历史（messages 格式，每条消息独立一项）"""
     with _chat_lock:
         if not _chat_history:
-            return [{"role": "assistant", "content": "填写配置后点击「启动/重启网关」。飞书消息将作为 DeskClaw 指令发送给 Agent。修改配置后再次点击可重启并应用新配置。"}]
+            return [{"role": "assistant", "content": "配置 Planner 模型后，可直接在下方输入框发送指令本地执行。如需通过飞书远程控制，请展开「飞书网关设置（可选）」并点击「启动/重启网关」。"}]
         return list(_chat_history)
 
 
@@ -266,10 +265,9 @@ def setup_planner_for_model(model: str):
     return False, "", "API Key", "", "", ""
 
 
-with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
-    gr.Markdown("# 飞书网关 - DeskClaw")
-    gr.Markdown("配置飞书机器人和 Planner 模型，启动后在飞书中与机器人对话即可远程控制电脑。")
-    gr.Markdown("> **飞书收到的消息** = App 中的「发往 DeskClaw 的指令」，与在 Gradio 界面直接输入等效。")
+with gr.Blocks(title="DeskClaw") as demo:
+    gr.Markdown("# DeskClaw")
+    gr.Markdown("配置 Planner 模型，在下方输入指令即可本地执行。飞书网关为可选项，启用后可在飞书中远程控制电脑。")
 
     def _env_val(key: str) -> str:
         """飞书凭证优先从 .env 文件直接读取，避免 dotenv 解析问题；其他 key 用 os.getenv"""
@@ -278,42 +276,6 @@ with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
             if v:
                 return v
         return _clean_cred(os.getenv(key) or "")
-
-    with gr.Accordion("飞书配置", open=True):
-        feishu_app_id = gr.Textbox(
-            label="App ID",
-            value=_env_val("FEISHU_APP_ID"),
-            placeholder="cli_xxx",
-            interactive=True,
-        )
-        feishu_app_secret = gr.Textbox(
-            label="App Secret",
-            value=_env_val("FEISHU_APP_SECRET"),
-            type="password",
-            placeholder="飞书应用密钥",
-            interactive=True,
-        )
-        feishu_domain = gr.Textbox(
-            label="API 域名（可选）",
-            value=_env_val("FEISHU_DOMAIN") or "https://open.feishu.cn",
-            placeholder="https://open.feishu.cn，国际版用 https://open.larksuite.com",
-            interactive=True,
-        )
-        load_env_btn = gr.Button("从 .env 加载飞书凭证", size="sm", variant="secondary")
-
-        def load_from_env():
-            """从 .env 重新读取飞书凭证并更新到输入框"""
-            return (
-                _read_feishu_from_env_file("FEISHU_APP_ID"),
-                _read_feishu_from_env_file("FEISHU_APP_SECRET"),
-                _read_feishu_from_env_file("FEISHU_DOMAIN") or "https://open.feishu.cn",
-            )
-
-        load_env_btn.click(
-            fn=load_from_env,
-            inputs=None,
-            outputs=[feishu_app_id, feishu_app_secret, feishu_domain],
-        )
 
     with gr.Accordion("Planner 模型配置", open=True):
         planner_model = gr.Dropdown(
@@ -349,17 +311,56 @@ with gr.Blocks(title="飞书网关 - DeskClaw") as demo:
                 interactive=True,
             )
 
-    start_btn = gr.Button("启动/重启网关", variant="primary")
+    with gr.Accordion("飞书网关设置（可选）", open=False):
+        gr.Markdown("> 启用后，飞书收到的消息将作为 DeskClaw 指令发送给 Agent，与在界面直接输入等效。")
+        with gr.Accordion("飞书配置", open=True):
+            feishu_app_id = gr.Textbox(
+                label="App ID",
+                value=_env_val("FEISHU_APP_ID"),
+                placeholder="cli_xxx",
+                interactive=True,
+            )
+            feishu_app_secret = gr.Textbox(
+                label="App Secret",
+                value=_env_val("FEISHU_APP_SECRET"),
+                type="password",
+                placeholder="飞书应用密钥",
+                interactive=True,
+            )
+            feishu_domain = gr.Textbox(
+                label="API 域名（可选）",
+                value=_env_val("FEISHU_DOMAIN") or "https://open.feishu.cn",
+                placeholder="https://open.feishu.cn，国际版用 https://open.larksuite.com",
+                interactive=True,
+            )
+            load_env_btn = gr.Button("从 .env 加载飞书凭证", size="sm", variant="secondary")
+
+            def load_from_env():
+                """从 .env 重新读取飞书凭证并更新到输入框"""
+                return (
+                    _read_feishu_from_env_file("FEISHU_APP_ID"),
+                    _read_feishu_from_env_file("FEISHU_APP_SECRET"),
+                    _read_feishu_from_env_file("FEISHU_DOMAIN") or "https://open.feishu.cn",
+                )
+
+            load_env_btn.click(
+                fn=load_from_env,
+                inputs=None,
+                outputs=[feishu_app_id, feishu_app_secret, feishu_domain],
+            )
+
+        start_btn = gr.Button("启动/重启网关", variant="primary")
+
     chat_history = gr.Chatbot(
-        label="对话记录（飞书消息 / 本地输入 → DeskClaw 指令 → Agent 回复）",
-        value=[{"role": "assistant", "content": "填写配置后点击「启动/重启网关」。也可直接在下方输入框发送指令本地执行。"}],
+        label="对话记录（本地输入 / 飞书消息 → DeskClaw 指令 → Agent 回复）",
+        value=[{"role": "assistant", "content": "配置 Planner 模型后，可直接在下方输入框发送指令本地执行。如需通过飞书远程控制，请展开「飞书网关设置（可选）」并点击「启动/重启网关」。"}],
         height=500,
         sanitize_html=False,
     )
     with gr.Row():
         local_input = gr.Textbox(
             label="本地指令",
-            placeholder="直接输入指令，按 Enter 或点击发送，不经过飞书直接执行",
+            placeholder="直接输入指令，按 Enter 或点击发送",
             scale=5,
             lines=1,
             interactive=True,

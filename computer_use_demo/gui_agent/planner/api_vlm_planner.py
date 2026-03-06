@@ -31,8 +31,8 @@ def _parse_plan_json_fallback(raw: str) -> dict:
     if m:
         v = m.group(1)
         out["value"] = None if v == "null" else v.strip('"')
-    # position: "position": [0.288, 0.259] 或 null
-    m = re.search(r'"position"\s*:\s*(\[[\d.,\s]+\]|null)', raw)
+    # position: "position": [0.288, 0.259] 或 [[x1,y1],[x2,y2]]（DRAG）或 null
+    m = re.search(r'"position"\s*:\s*(\[\[[\d.,\s]+\],\s*\[[\d.,\s]+\]\]|\[[\d.,\s]+\]|null)', raw)
     if m:
         p = m.group(1)
         if p != "null":
@@ -295,12 +295,21 @@ To estimate: find the element's pixel position in the screenshot, then divide by
 
 === AVAILABLE ACTIONS (one per response) ===
 
-1. CLICK - Single left-click at a position
+1. CLICK - Single click at a position (left or right button)
    Required: position [x, y]
-   Use for: buttons, links, checkboxes, selecting items, focusing input fields
+   Optional: value "left" (default) or "right" - which mouse button to use
+   Use for: buttons, links, checkboxes, context menus (right), focusing input fields
    Example: {{"action": "CLICK", "value": null, "position": [0.5, 0.08]}}
+   Example: {{"action": "CLICK", "value": "right", "position": [0.5, 0.08]}}
 
-2. INPUT - Type text (the text is typed at current cursor position)
+2. DOUBLE_CLICK - Double click at a position (left or right button)
+   Required: position [x, y]
+   Optional: value "left" (default) or "right"
+   Use for: selecting words, opening files/folders, editing in place
+   Example: {{"action": "DOUBLE_CLICK", "value": null, "position": [0.5, 0.3]}}
+   Example: {{"action": "DOUBLE_CLICK", "value": "right", "position": [0.5, 0.3]}}
+
+3. INPUT - Type text (the text is typed at current cursor position)
    Required: value (the text string to type)
    Optional: position [x, y] (ignored, use CLICK first to focus the field)
    Use for: typing in text fields, search bars, address bars, etc.
@@ -308,27 +317,30 @@ To estimate: find the element's pixel position in the screenshot, then divide by
    NOTE: INPUT only supports ASCII characters (a-z, A-Z, 0-9, symbols). For non-ASCII (Chinese, etc.), use the clipboard method: first CLICK the field, then use KEY with "ctrl+a" to select all, then INPUT the text.
    Example: {{"action": "INPUT", "value": "hello world", "position": null}}
 
-3. HOVER - Move mouse to a position without clicking
+4. HOVER - Move mouse to a position without clicking
    Required: position [x, y]
    Use for: hovering over menus to reveal submenus, tooltips
    Example: {{"action": "HOVER", "value": null, "position": [0.3, 0.1]}}
 
-4. PRESS - Long press (mouse down, hold 1 second, mouse up)
-   Required: position [x, y]
-   Use for: drag initiation, context menus on some systems, long-press interactions
-   Example: {{"action": "PRESS", "value": null, "position": [0.5, 0.5]}}
+# 5. PRESS - 已注释，用途有限
+#    Example: {{"action": "PRESS", "value": null, "position": [0.5, 0.5]}}
 
-5. ENTER - Press the Enter/Return key
+6. DRAG - Drag from start position to end position (left mouse button)
+   Required: position [[x1, y1], [x2, y2]] - start and end coordinates (0-1 range)
+   Use for: dragging files, reordering items, selecting text by dragging, scrollbars
+   Example: {{"action": "DRAG", "value": null, "position": [[0.2, 0.3], [0.6, 0.5]]}}
+
+7. ENTER - Press the Enter/Return key
    No position or value needed.
    Use for: confirming input, submitting forms, executing commands
    Example: {{"action": "ENTER", "value": null, "position": null}}
 
-6. ESCAPE - Press the Escape key
+8. ESCAPE - Press the Escape key
    No position or value needed.
    Use for: closing dialogs, canceling operations, exiting menus
    Example: {{"action": "ESCAPE", "value": null, "position": null}}
 
-7. KEY - Press a key or key combination
+9. KEY - Press a key or key combination
    Required: value (key name or combination with + separator)
    No position needed.
    Supported keys: enter, esc, tab, space, backspace, delete, up, down, left, right, home, end, pageup, pagedown, f1-f12
@@ -339,23 +351,23 @@ To estimate: find the element's pixel position in the screenshot, then divide by
    Example: {{"action": "KEY", "value": "alt+f4", "position": null}}
    Example: {{"action": "KEY", "value": "tab", "position": null}}
 
-8. SCROLL - Scroll the page up or down
+10. SCROLL - Scroll the page up or down
    Required: value ("up" or "down")
    No position needed. Scrolls one page at a time.
    Use for: scrolling web pages, long documents, lists
    Example: {{"action": "SCROLL", "value": "down", "position": null}}
 
-9. ASK_USER - Pause and ask the user for clarification when uncertain
+11. ASK_USER - Pause and ask the user for clarification when uncertain
    Use when: you cannot determine the correct action from the screenshot alone (e.g. multiple similar buttons, ambiguous intent, need user to choose).
    Required: value (the question to ask the user, in Chinese or English)
    Example: {{"Thinking": "屏幕上有两个「确定」按钮，无法判断应点击哪一个。", "action": "ASK_USER", "value": "请告诉我应该点击左边还是右边的「确定」按钮？", "position": null}}
    The user's reply will be appended to the conversation and you will continue in the next step.
 
-10. None - Task is completed, no more actions needed
+12. None - Task is completed, no more actions needed
    When outputting action "None", you MUST also output a "summary" field: a brief Chinese description of the steps you took (每步一行，如 1. 点击xxx 2. 输入xxx). This will be saved for future reference.
    Example: {{"Thinking": "任务已完成。", "action": "None", "value": null, "position": null, "summary": "1. 点击 Dock 栏的 WPS 图标\\n2. 点击文件菜单新建表格\\n3. 在第一列输入今天日期"}}
 
-11. FAIL - Task failed, terminate immediately
+13. FAIL - Task failed, terminate immediately
    Use when: the SAME step has been tried 3 times in a row without completing the task. Check the history of previous plans - if you see the same action (same type, value, position) repeated 3 times, output FAIL to terminate.
    Example: {{"action": "FAIL", "value": "Reason: same click repeated 3 times without progress", "position": null}}
 
@@ -363,19 +375,22 @@ To estimate: find the element's pixel position in the screenshot, then divide by
 You MUST output a single JSON object (no markdown, no code fences, no extra text):
 {{
     "Thinking": "Brief reasoning about current screen state and what to do next",
-    "action": "CLICK|INPUT|HOVER|PRESS|ENTER|ESCAPE|KEY|SCROLL|ASK_USER|None|FAIL",
-    "value": "text for INPUT/KEY, up/down for SCROLL, or null for other actions",
-    "position": [x, y] | null,
+    "action": "CLICK|DOUBLE_CLICK|INPUT|HOVER|DRAG|ENTER|ESCAPE|KEY|SCROLL|ASK_USER|None|FAIL",
+    "value": "text for INPUT/KEY, up/down for SCROLL, left/right for CLICK/DOUBLE_CLICK, or null",
+    "position": [x, y] | [[x1,y1],[x2,y2]] for DRAG | null,
     "summary": "Only when action is None: brief Chinese steps (每步一行，1. xxx 2. xxx)"
 }}
 
 === EXAMPLES ===
 {{"Thinking": "I need to click the browser's address bar to type a URL. The address bar is at the top center.", "action": "CLICK", "value": null, "position": [0.5, 0.05]}}
+{{"Thinking": "Double-click to select the filename for editing.", "action": "DOUBLE_CLICK", "value": null, "position": [0.4, 0.2]}}
 {{"Thinking": "Now I'll type the URL.", "action": "INPUT", "value": "amazon.com", "position": null}}
 {{"Thinking": "Press Enter to navigate.", "action": "ENTER", "value": null, "position": null}}
 {{"Thinking": "I need to scroll down to see more content.", "action": "SCROLL", "value": "down", "position": null}}
 {{"Thinking": "Close the current browser tab with keyboard shortcut.", "action": "KEY", "value": "ctrl+w", "position": null}}
 {{"Thinking": "I need to close this window. I'll click the X button at top-right.", "action": "CLICK", "value": null, "position": [0.99, 0.01]}}
+{{"Thinking": "Right-click to open context menu.", "action": "CLICK", "value": "right", "position": [0.5, 0.5]}}
+{{"Thinking": "Drag the file icon to the folder.", "action": "DRAG", "value": null, "position": [[0.2, 0.4], [0.5, 0.6]]}}
 {{"Thinking": "The task is done.", "action": "None", "value": null, "position": null, "summary": "1. 点击地址栏\\n2. 输入 amazon.com\\n3. 按 Enter 打开"}}
 
 === CRITICAL RULES ===
