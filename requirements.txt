@@ -20,5 +20,7 @@ dashscope
 huggingface_hub
 openai
 
+anthropic
+
 # 飞书网关 (可选)
 lark-oapi>=1.2.0

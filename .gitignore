@@ -21,3 +21,4 @@ test.ipynb
 # 记忆系统用户数据（SOP 与全局事实）
 /memory/sops/
 /memory/global_facts.json
+.env.example

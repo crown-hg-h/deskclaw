@@ -209,6 +209,7 @@ def _run_agent_task(
     config=None,
     stop_requested: Callable[[], bool] | None = None,
     ask_user_callback: Callable[[str], str] | None = None,
+    selected_screen: int = 0,
 ) -> None:
     """
     与 app 一致：每条 output_callback/tool_output_callback 产生一条消息，立即发送到飞书。
@@ -314,7 +315,7 @@ def _run_agent_task(
             api_key=api_key,
             only_n_most_recent_images=5,
             max_tokens=4096,
-            selected_screen=0,
+            selected_screen=selected_screen,
             showui_max_pixels=1344,
             showui_awq_4bit=False,
             ui_tars_url="",
@@ -347,6 +348,7 @@ def create_feishu_gateway(
     planner_provider: str = "openai",
     api_key: str = "",
     system_prompt_suffix: str = "",
+    selected_screen: int = 0,
     executor: ThreadPoolExecutor | None = None,
     chat_callback: Callable[[str, str], None] | None = None,
 ):
@@ -488,6 +490,7 @@ def create_feishu_gateway(
                         api_key=api_key,
                         system_prompt_suffix=system_prompt_suffix,
                         config=config,
+                        selected_screen=selected_screen,
                     )
                 finally:
                     with _feishu_task_lock:

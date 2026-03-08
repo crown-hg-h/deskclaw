@@ -3,7 +3,7 @@
 > Desktop GUI Agent based on [Computer Use OOTB](https://github.com/showlab/computer_use_ootb), supporting multi-model, Feishu gateway, and memory system.
 
 ## Overview
-
+Like GPT5.4 computer-use 
 Out-of-the-box (OOTB) solution for Desktop GUI Agent, supporting:
 
 - **API Models**: Claude 3.5 Computer Use, GPT-4o, Qwen2-VL, Kimi-K2.5 (Azure), Custom OpenAI-compatible

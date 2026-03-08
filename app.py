@@ -26,6 +26,21 @@ import gradio as gr
 from computer_use_demo.tools.logger import logger
 from computer_use_demo.feishu_gateway import create_feishu_gateway, _run_agent_task, _stop_requested_flag
 
+
+def _get_screen_choices():
+    """获取屏幕列表供下拉框选择，返回 (choices, default_index)。"""
+    try:
+        from computer_use_demo.tools.computer import get_screen_details
+        screen_details, primary_index = get_screen_details()
+        if not screen_details:
+            return [("Screen 1 (主屏)", 0)], 0
+        # info 格式如 "Screen 1: 1920x1080, Left, Primary"
+        choices = [(info, i) for i, info in enumerate(screen_details)]
+        return choices, primary_index
+    except Exception as e:
+        logger.warning("获取屏幕列表失败，使用默认主屏: %s", e)
+        return [("Screen 1 (主屏)", 0)], 0
+
 # 启动时确认 .env 加载状态
 if os.path.exists(_env_path):
     logger.info("已加载 .env: %s (FEISHU_APP_ID=%s)", _env_path, "已设置" if os.getenv("FEISHU_APP_ID") else "未设置")
@@ -90,6 +105,7 @@ def _run_gateway_thread(
     planner_model: str,
     planner_provider: str,
     api_key: str,
+    selected_screen: int,
     chat_callback,
 ):
     """在后台线程中运行网关"""
@@ -107,6 +123,7 @@ def _run_gateway_thread(
             planner_model=planner_model,
             planner_provider=planner_provider,
             api_key=api_key,
+            selected_screen=selected_screen,
             chat_callback=chat_callback,
         )
         _gateway_client = client
@@ -141,8 +158,9 @@ def build_api_key(planner_model: str, api_base: str, api_key: str, model_id: str
     return key
 
 
-def start_gateway(app_id, app_secret, domain, planner_model, api_base, planner_api_key, model_id):
+def start_gateway(app_id, app_secret, domain, planner_model, api_base, planner_api_key, model_id, selected_screen=0):
     """启动/重启网关按钮回调。若网关已在运行，会先停止再以当前配置重启。"""
+    selected_screen = int(selected_screen) if selected_screen is not None else 0
     global _gateway_thread, _gateway_client, _chat_history
     # 当 App Secret 为空时，从 .env 回退读取（Gradio 密码框可能未正确传递预填值）
     if not (app_secret or "").strip():
@@ -172,7 +190,7 @@ def start_gateway(app_id, app_secret, domain, planner_model, api_base, planner_a
 
     t = threading.Thread(
         target=_run_gateway_thread,
-        args=(app_id, app_secret, domain, planner_model, planner_provider, api_key, chat_callback),
+        args=(app_id, app_secret, domain, planner_model, planner_provider, api_key, selected_screen, chat_callback),
         daemon=True,
     )
     _gateway_thread = t
@@ -198,8 +216,9 @@ def _make_ask_user_callback():
     return ask_user
 
 
-def _run_local_task(user_input: str, planner_model: str, api_base: str, planner_api_key: str, model_id: str):
+def _run_local_task(user_input: str, planner_model: str, api_base: str, planner_api_key: str, model_id: str, selected_screen: int = 0):
     """在后台线程中直接执行 Agent 任务（不经过飞书），结果写入 _chat_history"""
+    selected_screen = int(selected_screen) if selected_screen is not None else 0
     planner_provider = model_to_provider(planner_model)
     api_key = build_api_key(planner_model, api_base, planner_api_key, model_id)
 
@@ -212,7 +231,7 @@ def _run_local_task(user_input: str, planner_model: str, api_base: str, planner_
     threading.Thread(
         target=_run_agent_task,
         args=(user_input, send_fn, planner_model, planner_provider, api_key),
-        kwargs={"ask_user_callback": _make_ask_user_callback()},
+        kwargs={"ask_user_callback": _make_ask_user_callback(), "selected_screen": selected_screen},
         daemon=True,
     ).start()
 
@@ -278,6 +297,7 @@ with gr.Blocks(title="DeskClaw") as demo:
         return _clean_cred(os.getenv(key) or "")
 
     with gr.Accordion("Planner 模型配置", open=True):
+        _screen_choices, _primary_idx = _get_screen_choices()
         planner_model = gr.Dropdown(
             label="Planner Model",
             choices=[
@@ -288,6 +308,12 @@ with gr.Blocks(title="DeskClaw") as demo:
                 "Custom (OpenAI)",
             ],
             value=os.getenv("FEISHU_PLANNER_MODEL", "Kimi-K2.5 (Azure)"),
+            interactive=True,
+        )
+        selected_screen = gr.Dropdown(
+            label="目标屏幕",
+            choices=_screen_choices,
+            value=_primary_idx,
             interactive=True,
         )
         with gr.Row():
@@ -392,17 +418,17 @@ with gr.Blocks(title="DeskClaw") as demo:
 
     demo.load(fn=init_planner, inputs=None, outputs=[api_base_url, planner_api_key, custom_model_id])
 
-    def do_start(app_id, app_secret, domain, pm, base, pk, mid):
-        return start_gateway(app_id, app_secret, domain, pm, base, pk, mid)
+    def do_start(app_id, app_secret, domain, pm, base, pk, mid, screen):
+        return start_gateway(app_id, app_secret, domain, pm, base, pk, mid, screen)
 
     start_btn.click(
         fn=do_start,
         inputs=[feishu_app_id, feishu_app_secret, feishu_domain,
-                planner_model, api_base_url, planner_api_key, custom_model_id],
+                planner_model, api_base_url, planner_api_key, custom_model_id, selected_screen],
         outputs=[chat_history],
     )
 
-    def do_send(user_input, pm, base, pk, mid):
+    def do_send(user_input, pm, base, pk, mid, screen):
         if not user_input or not user_input.strip():
             return _get_chat_display(), ""
         text = user_input.strip()
@@ -420,17 +446,17 @@ with gr.Blocks(title="DeskClaw") as demo:
             _stop_requested_flag["value"] = True
             _append_chat("assistant", "⏹️ 已发送停止信号，当前任务将在下一步完成后终止。")
             return _get_chat_display(), ""
-        _run_local_task(text, pm, base, pk, mid)
+        _run_local_task(text, pm, base, pk, mid, selected_screen=screen)
         return _get_chat_display(), ""
 
     send_btn.click(
         fn=do_send,
-        inputs=[local_input, planner_model, api_base_url, planner_api_key, custom_model_id],
+        inputs=[local_input, planner_model, api_base_url, planner_api_key, custom_model_id, selected_screen],
         outputs=[chat_history, local_input],
     )
     local_input.submit(
         fn=do_send,
-        inputs=[local_input, planner_model, api_base_url, planner_api_key, custom_model_id],
+        inputs=[local_input, planner_model, api_base_url, planner_api_key, custom_model_id, selected_screen],
         outputs=[chat_history, local_input],
     )
 

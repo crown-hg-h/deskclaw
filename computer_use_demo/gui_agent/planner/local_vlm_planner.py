@@ -3,7 +3,12 @@ import asyncio
 import platform
 from collections.abc import Callable
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
+try:
+    from enum import StrEnum  # Python 3.11+
+except ImportError:
+    class StrEnum(str, Enum):
+        pass
 from typing import Any, cast, Dict, Callable
 
 from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex, APIResponse

@@ -12,7 +12,12 @@ import os
 import time
 if platform.system() == "Darwin":
     import Quartz  # uncomment this line if you are on macOS
-from enum import StrEnum
+from enum import Enum
+try:
+    from enum import StrEnum  # Python 3.11+
+except ImportError:  # Python <3.11
+    class StrEnum(str, Enum):
+        pass
 from pathlib import Path
 from typing import Literal, TypedDict
 from uuid import uuid4

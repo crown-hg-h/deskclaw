@@ -4,7 +4,12 @@ Agentic sampling loop that calls the Anthropic API and local implementation of c
 import time
 import json
 from collections.abc import Callable
-from enum import StrEnum
+from enum import Enum
+try:
+    from enum import StrEnum  # Python 3.11+
+except ImportError:
+    class StrEnum(str, Enum):
+        pass
 
 from anthropic import APIResponse
 from anthropic.types.beta import BetaContentBlock, BetaMessage, BetaMessageParam
