@@ -6,7 +6,7 @@
 Like GPT5.4 computer-use 
 Out-of-the-box (OOTB) solution for Desktop GUI Agent, supporting:
 
-- **API Models**: Claude 3.5 Computer Use, GPT-4o, Qwen2-VL, Kimi-K2.5 (Azure), Custom OpenAI-compatible
+- **API Models**: **Kimi-K2.5 (Recommended)**, Claude 3.5 Computer Use, GPT-4o, Qwen2-VL, Custom OpenAI-compatible
 - **Local Models**: ShowUI, Qwen2-VL local/SSH, Qwen2.5-VL via Ollama
 - **Feishu Gateway**: Receive messages via Feishu WebSocket long connection; chat with the bot in Feishu to control your computer remotely, no public IP required
 - **Memory System**: SOP recall and auto-save, inspired by pc-agent-loop
@@ -48,7 +48,7 @@ cp .env.example .env
 
 Configure in `.env`:
 
-- **Planner models**: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `QWEN_API_KEY`, `AZURE_OPENAI_CREDENTIALS`, `CUSTOM_OPENAI_CREDENTIALS`, `OLLAMA_API_BASE`, etc.
+- **Planner models** (Kimi-K2.5 recommended): `AZURE_OPENAI_CREDENTIALS` for Kimi-K2.5, or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `QWEN_API_KEY`, `CUSTOM_OPENAI_CREDENTIALS`, `OLLAMA_API_BASE`, etc.
 - **Feishu gateway**: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_DOMAIN` (optional)
 
 See [.env.example](.env.example) for details.
@@ -89,10 +89,12 @@ Based on [OpenClaw](https://docs.openclaw.ai/channels/feishu) architecture, via 
 
 | Type | Planner | Actor |
 |------|---------|-------|
-| API | GPT-4o, Qwen2-VL-Max, Kimi-K2.5 (Azure), Custom OpenAI | ShowUI |
+| API | **Kimi-K2.5 (Recommended)** ⭐, GPT-4o, Qwen2-VL-Max, Custom OpenAI | ShowUI |
 | Local | Qwen2-VL-2B/7B | ShowUI |
 | SSH | Qwen2-VL-2B/7B, Qwen2.5-VL-7B | ShowUI |
 | Ollama | Qwen2.5-VL | ShowUI |
+
+> **Tip**: Kimi-K2.5 offers the best balance of accuracy, speed, and cost for desktop automation tasks.
 
 ## Workflow
 
@@ -109,5 +111,5 @@ See [WORKFLOW.md](docs/WORKFLOW.md) for:
 ## Notes
 
 - **Security**: Models may perform unexpected actions; supervise AI behavior
-- **Cost**: Claude 3.5 Computer Use can cost several dollars per task; GPT-4o + ShowUI or Qwen + ShowUI is cheaper
+- **Cost**: Claude 3.5 Computer Use can cost several dollars per task; **Kimi-K2.5** offers the best value with excellent performance at lower cost
 - **Privacy**: Do not share public links; others could control your computer
